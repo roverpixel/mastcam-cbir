@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Ignore Images
+images/
+thumbnails/
+*.jpg
+*.png
+*.jpeg
+*.JPG
+*.PNG
+*.JPEG
+mars_qdrant_db/

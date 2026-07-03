@@ -46,9 +46,12 @@ def test_main_no_images(mock_setup_database, mock_processor, mock_model, capsys)
 @patch('ingest_images.CLIPModel.from_pretrained')
 @patch('ingest_images.CLIPProcessor.from_pretrained')
 @patch('ingest_images.setup_database')
-def test_main_with_images(mock_setup_database, mock_processor, mock_model, dummy_images_dir, capsys):
+def test_main_with_images(mock_setup_database, mock_processor, mock_model, dummy_images_dir, tmp_path, capsys):
     # Set IMAGE_DIRECTORY to dummy_images_dir
     ingest_images.IMAGE_DIRECTORY = dummy_images_dir
+
+    # Use temporary directory for thumbnails
+    ingest_images.THUMBNAIL_DIRECTORY = str(tmp_path / "thumbnails")
 
     # Mocking Qdrant
     mock_qdrant = MagicMock()

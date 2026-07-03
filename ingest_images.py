@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 # --- CONFIGURATION ---
 IMAGE_DIRECTORY = os.environ.get("IMAGE_DIRECTORY", "/path/to/your/mars/images")
+THUMBNAIL_DIRECTORY = os.environ.get("THUMBNAIL_DIRECTORY", "./thumbnails")
 DB_PATH = os.environ.get("DB_PATH", "./mars_qdrant_db")  # Database will be saved to this local folder
 COLLECTION_NAME = os.environ.get("COLLECTION_NAME", "mars_mastcam")
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 64))  # Adjust based on your GPU/CPU RAM (32, 64, or 128)
@@ -45,6 +46,9 @@ def main():
     # 2. Setup Database
     qdrant = setup_database()
 
+    # Create thumbnail directory if it doesn't exist
+    os.makedirs(THUMBNAIL_DIRECTORY, exist_ok=True)
+
     # 3. Gather Image Paths
     print("Scanning directory for images...")
     extensions = ('*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG')
@@ -72,6 +76,11 @@ def main():
                 img = Image.open(path).convert("RGB")
                 valid_images.append(img)
                 valid_paths.append(path)
+
+                # Save thumbnail
+                img.thumbnail((256, 256))
+                thumb_path = os.path.join(THUMBNAIL_DIRECTORY, os.path.basename(path))
+                img.save(thumb_path)
             except Exception as e:
                 print(f"\nSkipping corrupted image {path}: {e}")
 
@@ -83,6 +92,11 @@ def main():
             inputs = processor(images=valid_images, return_tensors="pt").to(device)
             with torch.no_grad():
                 features = model.get_image_features(**inputs)
+
+            if hasattr(features, 'pooler_output'):
+                features = features.pooler_output
+            elif isinstance(features, tuple):
+                features = features[0]
 
             # Normalize vectors (best practice for Cosine similarity)
             features = features / features.norm(dim=-1, keepdim=True)

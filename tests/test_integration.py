@@ -39,6 +39,9 @@ def test_integration_ingest_and_search(mock_search_processor, mock_search_model,
 
     ingest_images.IMAGE_DIRECTORY = dummy_images_dir
 
+    # Use temporary directory for thumbnails
+    ingest_images.THUMBNAIL_DIRECTORY = os.path.join(temp_db_dir, "thumbnails")
+
     # --- 2. Mocking CLIP models for deterministic vector outputs ---
     mock_ingest_processor_instance = MagicMock()
     mock_ingest_processor.return_value = mock_ingest_processor_instance

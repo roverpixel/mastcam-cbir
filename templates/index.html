@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mastcam-CBIR Search</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        #upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 50px;
+            text-align: center;
+            background-color: #fff;
+            margin: 20px auto;
+            max-width: 600px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #upload-area.dragover {
+            background-color: #e9f5ff;
+            border-color: #007bff;
+        }
+        #upload-area p {
+            font-size: 1.2em;
+            color: #666;
+            margin: 0;
+        }
+        #file-input {
+            display: none;
+        }
+        #preview-container {
+            text-align: center;
+            margin-bottom: 20px;
+            display: none;
+        }
+        #preview-image {
+            max-width: 300px;
+            max-height: 300px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #loading {
+            text-align: center;
+            display: none;
+            font-size: 1.1em;
+            color: #007bff;
+            margin-top: 20px;
+        }
+        #results {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        .result-card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 256px;
+        }
+        .result-card img {
+            max-width: 100%;
+            border-radius: 4px;
+        }
+        .result-card .score {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #333;
+        }
+        .result-card .filename {
+            font-size: 0.9em;
+            color: #777;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Mars Mastcam Image Search</h1>
+
+    <div id="upload-area">
+        <p>Drag & Drop an image here or click to upload</p>
+        <input type="file" id="file-input" accept="image/jpeg, image/png, image/jpg">
+    </div>
+
+    <div id="preview-container">
+        <h3>Query Image</h3>
+        <img id="preview-image" src="" alt="Query Preview">
+    </div>
+
+    <div id="loading">Searching database...</div>
+
+    <div id="results"></div>
+
+    <script>
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const previewContainer = document.getElementById('preview-container');
+        const previewImage = document.getElementById('preview-image');
+        const loading = document.getElementById('loading');
+        const resultsContainer = document.getElementById('results');
+
+        // Handle click to open file dialog
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // Handle drag and drop events
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // Handle file input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                previewContainer.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+
+            // Perform search
+            searchImage(file);
+        }
+
+        async function searchImage(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            loading.style.display = 'block';
+            resultsContainer.innerHTML = '';
+
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Search failed');
+                }
+
+                const data = await response.json();
+                displayResults(data.matches);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function displayResults(matches) {
+            if (!matches || matches.length === 0) {
+                resultsContainer.innerHTML = '<p>No matches found.</p>';
+                return;
+            }
+
+            matches.forEach(match => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+
+                const img = document.createElement('img');
+                img.src = `/thumbnails/${encodeURIComponent(match.filename)}`;
+                img.alt = match.filename;
+                img.onerror = function() {
+                    this.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%22256%22%20height%3D%22256%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20256%20256%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3Cstyle%20type%3D%22text%2Fcss%22%3E%23holder_18e1d528b81%20text%20%7B%20fill%3A%23999%3Bfont-weight%3Anormal%3Bfont-family%3Avar(--bs-font-sans-serif)%2C%20sans-serif%3Bfont-size%3A18pt%20%7D%20%3C%2Fstyle%3E%3C%2Fdefs%3E%3Cg%20id%3D%22holder_18e1d528b81%22%3E%3Crect%20width%3D%22256%22%20height%3D%22256%22%20fill%3D%22%23eee%22%3E%3C%2Frect%3E%3Cg%3E%3Ctext%20x%3D%2275.5%22%20y%3D%22136%22%3ENo%20Thumbnail%3C%2Ftext%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E';
+                };
+
+                const score = document.createElement('div');
+                score.className = 'score';
+                score.textContent = `Score: ${(match.score * 100).toFixed(2)}%`;
+
+                const filename = document.createElement('div');
+                filename.className = 'filename';
+                filename.textContent = match.filename;
+
+                card.appendChild(img);
+                card.appendChild(score);
+                card.appendChild(filename);
+
+                resultsContainer.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
