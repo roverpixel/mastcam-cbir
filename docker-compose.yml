@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    volumes:
+      - ./images:/images
+      - ./db:/db
+    environment:
+      - IMAGE_DIRECTORY=/images
+      - DB_PATH=/db

@@ -8,10 +8,10 @@ from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from tqdm import tqdm
 
 # --- CONFIGURATION ---
-IMAGE_DIRECTORY = "/path/to/your/mars/images"
-DB_PATH = "./mars_qdrant_db"  # Database will be saved to this local folder
-COLLECTION_NAME = "mars_mastcam"
-BATCH_SIZE = 64  # Adjust based on your GPU/CPU RAM (32, 64, or 128)
+IMAGE_DIRECTORY = os.environ.get("IMAGE_DIRECTORY", "/path/to/your/mars/images")
+DB_PATH = os.environ.get("DB_PATH", "./mars_qdrant_db")  # Database will be saved to this local folder
+COLLECTION_NAME = os.environ.get("COLLECTION_NAME", "mars_mastcam")
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 64))  # Adjust based on your GPU/CPU RAM (32, 64, or 128)
 
 def setup_database():
     """Initializes the Qdrant local database."""
