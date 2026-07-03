@@ -6,6 +6,21 @@ services:
     volumes:
       - ./images:/images
       - ./db:/db
+      - ./thumbnails:/thumbnails
     environment:
       - IMAGE_DIRECTORY=/images
       - DB_PATH=/db
+      - THUMBNAIL_DIRECTORY=/thumbnails
+    command: python ingest_images.py
+
+  web:
+    build: .
+    volumes:
+      - ./db:/db
+      - ./thumbnails:/thumbnails
+    environment:
+      - DB_PATH=/db
+      - THUMBNAIL_DIRECTORY=/thumbnails
+    ports:
+      - "5000:5000"
+    command: python app.py

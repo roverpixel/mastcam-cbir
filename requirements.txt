@@ -4,3 +4,5 @@ transformers
 qdrant-client
 pillow
 tqdm
+flask
+werkzeug
