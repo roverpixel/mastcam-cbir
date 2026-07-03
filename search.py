@@ -49,11 +49,19 @@ def main():
 
     print("Searching database...")
     try:
-        search_result = client.search(
-            collection_name=COLLECTION_NAME,
-            query_vector=query_vector,
-            limit=5  # Return top 5 matches
-        )
+        if hasattr(client, 'search'):
+            search_result = client.search(
+                collection_name=COLLECTION_NAME,
+                query_vector=query_vector,
+                limit=5  # Return top 5 matches
+            )
+        else:
+            # Fallback to query_points for newer qdrant-client versions
+            search_result = client.query_points(
+                collection_name=COLLECTION_NAME,
+                query=query_vector,
+                limit=5  # Return top 5 matches
+            ).points
 
         for hit in search_result:
             print(f"Match Score: {hit.score:.4f} | File: {hit.payload['filepath']}")
