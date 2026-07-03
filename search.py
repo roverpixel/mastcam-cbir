@@ -2,11 +2,12 @@ import sys
 import torch
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
+import os
 from qdrant_client import QdrantClient
 
 # --- CONFIGURATION ---
-DB_PATH = "./mars_qdrant_db"
-COLLECTION_NAME = "mars_mastcam"
+DB_PATH = os.environ.get("DB_PATH", "./mars_qdrant_db")
+COLLECTION_NAME = os.environ.get("COLLECTION_NAME", "mars_mastcam")
 
 def get_image_vector(image_path):
     device = "cuda" if torch.cuda.is_available() else "cpu"
