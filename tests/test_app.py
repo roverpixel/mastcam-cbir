@@ -50,6 +50,11 @@ def test_search_no_file(client):
     assert response.status_code == 400
     assert b'No file uploaded' in response.data
 
+@patch('app.get_image_vector_from_bytes')
+def test_search_general_exception(mock_get_image_vector, client):
+    # Mock to raise an exception
+    mock_get_image_vector.side_effect = Exception("Test general exception")
+
 def test_get_image_vector_from_bytes_invalid_image():
     with pytest.raises(ValueError, match="Invalid image:"):
         get_image_vector_from_bytes(b"not an image")
