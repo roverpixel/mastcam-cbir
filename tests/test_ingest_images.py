@@ -83,3 +83,41 @@ def test_main_with_images(mock_setup_database, mock_processor, mock_model, dummy
     # We should have found 2 images, 1 corrupted, 1 processed
     assert "Found 2 images to process." in captured.out
     mock_qdrant.upsert.assert_called_once()
+
+@patch('ingest_images.CLIPModel.from_pretrained')
+@patch('ingest_images.CLIPProcessor.from_pretrained')
+@patch('ingest_images.setup_database')
+def test_main_batch_processing_error(mock_setup_database, mock_processor, mock_model, dummy_images_dir, tmp_path, capsys):
+    # Set IMAGE_DIRECTORY to dummy_images_dir
+    ingest_images.IMAGE_DIRECTORY = dummy_images_dir
+
+    # Use temporary directory for thumbnails
+    ingest_images.THUMBNAIL_DIRECTORY = str(tmp_path / "thumbnails")
+
+    # Mocking Qdrant to raise Exception
+    mock_qdrant = MagicMock()
+    mock_setup_database.return_value = mock_qdrant
+    mock_qdrant.upsert.side_effect = Exception("Simulated DB error")
+
+    # Mocking Processor
+    mock_processor_instance = MagicMock()
+    mock_processor.return_value = mock_processor_instance
+
+    # Create a mock for the inputs that has a .to() method
+    mock_inputs = MagicMock()
+    mock_processor_instance.return_value = mock_inputs
+    mock_inputs.to.return_value = mock_inputs
+
+    # Mocking Model
+    mock_model_instance = MagicMock()
+    mock_model.return_value = mock_model_instance
+    mock_model_instance.to.return_value = mock_model_instance
+
+    # Fake features
+    fake_features = torch.tensor([[1.0, 0.0]])
+    mock_model_instance.get_image_features.return_value = fake_features
+
+    ingest_images.main()
+
+    captured = capsys.readouterr()
+    assert "Error processing batch starting at index 0: Simulated DB error" in captured.out

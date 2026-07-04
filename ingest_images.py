@@ -4,6 +4,7 @@ import torch
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 from qdrant_client import QdrantClient
+from utils import extract_features
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from tqdm import tqdm
 
@@ -51,11 +52,15 @@ def main():
 
     # 3. Gather Image Paths
     print("Scanning directory for images...")
-    extensions = ('*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG')
+    valid_extensions = {'.jpg', '.jpeg', '.png'}
     image_paths = []
-    for ext in extensions:
-        # Use simple globbing since you mentioned a single directory
-        image_paths.extend(glob.glob(os.path.join(IMAGE_DIRECTORY, ext)))
+    try:
+        with os.scandir(IMAGE_DIRECTORY) as entries:
+            for entry in entries:
+                if entry.is_file() and os.path.splitext(entry.name)[1].lower() in valid_extensions:
+                    image_paths.append(entry.path)
+    except FileNotFoundError:
+        pass
 
     total_images = len(image_paths)
     print(f"Found {total_images} images to process.")
@@ -89,34 +94,20 @@ def main():
 
         # Process batch through CLIP
         try:
-            inputs = processor(images=valid_images, return_tensors="pt").to(device)
-            with torch.no_grad():
-                features = model.get_image_features(**inputs)
-
-            if hasattr(features, 'pooler_output'):
-                features = features.pooler_output
-            elif isinstance(features, tuple):
-                features = features[0]
-
-            # Normalize vectors (best practice for Cosine similarity)
-            features = features / features.norm(dim=-1, keepdim=True)
-            vectors = features.cpu().numpy().tolist()
+            vectors = extract_features(valid_images, model, processor, device)
 
             # 5. Prepare Qdrant Points
-            points = []
-            for j, (vector, filepath) in enumerate(zip(vectors, valid_paths)):
-                # Use a unique integer ID based on the global index
-                point_id = i + j
-                points.append(
-                    PointStruct(
-                        id=point_id,
-                        vector=vector,
-                        payload={
-                            "filepath": filepath,
-                            "filename": os.path.basename(filepath)
-                        }
-                    )
+            points = [
+                PointStruct(
+                    id=i + j,
+                    vector=vector,
+                    payload={
+                        "filepath": filepath,
+                        "filename": os.path.basename(filepath)
+                    }
                 )
+                for j, (vector, filepath) in enumerate(zip(vectors, valid_paths))
+            ]
 
             # 6. Upload to Vector Database
             qdrant.upsert(
