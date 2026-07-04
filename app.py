@@ -1,7 +1,6 @@
 import os
 import io
 from flask import Flask, request, jsonify, render_template, send_from_directory
-from werkzeug.utils import secure_filename
 from PIL import Image
 import torch
 from transformers import CLIPProcessor, CLIPModel
