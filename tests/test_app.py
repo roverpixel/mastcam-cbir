@@ -49,3 +49,23 @@ def test_search_no_file(client):
     response = client.post('/search')
     assert response.status_code == 400
     assert b'No file uploaded' in response.data
+
+@patch('app.get_image_vector_from_bytes')
+def test_search_general_exception(mock_get_image_vector, client):
+    # Mock to raise an exception
+    mock_get_image_vector.side_effect = Exception("Test general exception")
+
+    # Create dummy image file
+    img = Image.new('RGB', (10, 10), color='red')
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format='JPEG')
+    img_byte_arr.seek(0)
+
+    response = client.post('/search', data={
+        'file': (img_byte_arr, 'test.jpg')
+    })
+
+    assert response.status_code == 500
+    data = response.get_json()
+    assert 'error' in data
+    assert data['error'] == "Test general exception"
