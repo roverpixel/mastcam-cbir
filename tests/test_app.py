@@ -67,3 +67,16 @@ def test_serve_thumbnail_not_found(client, tmp_path, monkeypatch):
     monkeypatch.setattr('app.THUMBNAIL_DIRECTORY', str(tmp_path))
     response = client.get('/thumbnails/non_existent.jpg')
     assert response.status_code == 404
+@patch('app.Image.open')
+@patch('app.get_model')
+def test_decompression_bomb_prevention(mock_get_model, mock_image_open):
+    # Mock get_model so we don't load CLIP
+    mock_get_model.return_value = (MagicMock(), MagicMock())
+
+    # Simulate a decompression bomb error
+    mock_image_open.side_effect = Image.DecompressionBombError("Image size exceeds limit")
+
+    with pytest.raises(ValueError) as excinfo:
+        get_image_vector_from_bytes(b"dummy image data")
+
+    assert "Invalid image: Image size exceeds limit" in str(excinfo.value)

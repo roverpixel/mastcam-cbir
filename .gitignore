@@ -228,3 +228,4 @@ thumbnails/
 *.PNG
 *.JPEG
 mars_qdrant_db/
+benchmark_images/
