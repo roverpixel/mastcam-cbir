@@ -96,6 +96,7 @@ def test_main_search_error(mock_get_image_vector, mock_qdrant_client, capsys):
 
     captured = capsys.readouterr()
     assert "Error during search: Simulated Qdrant search error" in captured.out
+@patch('search.QdrantClient')
 @patch('sys.argv', ['search.py', 'dummy_image.jpg'])
 def test_main_qdrant_connection_error(mock_qdrant_client, capsys):
     mock_qdrant_client.side_effect = Exception("Connection Refused")
