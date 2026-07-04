@@ -51,11 +51,15 @@ def main():
 
     # 3. Gather Image Paths
     print("Scanning directory for images...")
-    extensions = ('*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG')
+    valid_extensions = {'.jpg', '.jpeg', '.png'}
     image_paths = []
-    for ext in extensions:
-        # Use simple globbing since you mentioned a single directory
-        image_paths.extend(glob.glob(os.path.join(IMAGE_DIRECTORY, ext)))
+    try:
+        with os.scandir(IMAGE_DIRECTORY) as entries:
+            for entry in entries:
+                if entry.is_file() and os.path.splitext(entry.name)[1].lower() in valid_extensions:
+                    image_paths.append(entry.path)
+    except FileNotFoundError:
+        pass
 
     total_images = len(image_paths)
     print(f"Found {total_images} images to process.")
