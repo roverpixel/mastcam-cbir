@@ -1,5 +1,6 @@
 import os
 import io
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from PIL import Image
 import torch
@@ -9,6 +10,8 @@ from utils import extract_features
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max
+# Apply ProxyFix to support subpaths and reverse proxies
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Configuration
 DB_PATH = os.environ.get("DB_PATH", "./mars_qdrant_db")
@@ -111,4 +114,4 @@ def search():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=True)
