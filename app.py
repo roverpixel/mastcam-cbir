@@ -8,9 +8,25 @@ from transformers import CLIPProcessor, CLIPModel
 from qdrant_client import QdrantClient
 from utils import extract_features
 
+class ProxyPrefixFix:
+    """
+    Middleware to strip the X-Forwarded-Prefix from the path if the proxy didn't do it.
+    """
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+        prefix = environ.get('HTTP_X_FORWARDED_PREFIX', '')
+        if prefix and environ.get('PATH_INFO', '').startswith(prefix):
+            environ['PATH_INFO'] = environ['PATH_INFO'][len(prefix):]
+            if not environ['PATH_INFO']:
+                environ['PATH_INFO'] = '/'
+        return self.app(environ, start_response)
+
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max
-# Apply ProxyFix to support subpaths and reverse proxies
+# Apply ProxyFix and ProxyPrefixFix to support subpaths and reverse proxies
+app.wsgi_app = ProxyPrefixFix(app.wsgi_app)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Configuration
