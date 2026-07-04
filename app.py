@@ -104,12 +104,13 @@ def search():
                 limit=10
             ).points
 
-        results = []
-        for hit in search_result:
-            results.append({
+        results = [
+            {
                 'score': round(hit.score, 4),
                 'filename': hit.payload['filename']
-            })
+            }
+            for hit in search_result
+        ]
 
         return jsonify({'matches': results})
 

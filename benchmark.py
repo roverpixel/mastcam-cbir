@@ -1,62 +1,31 @@
 import timeit
 
-setup_code = """
-import os
-from collections import namedtuple
+class Hit:
+    def __init__(self, score, filename):
+        self.score = score
+        self.payload = {'filename': filename}
 
-# Mock PointStruct since we just want to measure loop overhead
-class PointStruct:
-    __slots__ = ['id', 'vector', 'payload']
-    def __init__(self, id, vector, payload):
-        self.id = id
-        self.vector = vector
-        self.payload = payload
+# Simulate a typical search result size (e.g., limit=10)
+search_result = [Hit(0.95 + (i * 0.001), f'file_{i}.jpg') for i in range(10)]
 
-# Mock data
-batch_size = 64
-vectors = [[0.1] * 512 for _ in range(batch_size)]
-valid_paths = [f"/path/to/image_{k}.jpg" for k in range(batch_size)]
-i = 1000
-"""
+def using_loop():
+    results = []
+    for hit in search_result:
+        results.append({
+            'score': round(hit.score, 4),
+            'filename': hit.payload['filename']
+        })
+    return results
 
-baseline_code = """
-points = []
-for j, (vector, filepath) in enumerate(zip(vectors, valid_paths)):
-    point_id = i + j
-    points.append(
-        PointStruct(
-            id=point_id,
-            vector=vector,
-            payload={
-                "filepath": filepath,
-                "filename": os.path.basename(filepath)
-            }
-        )
-    )
-"""
+def using_list_comp():
+    return [{
+        'score': round(hit.score, 4),
+        'filename': hit.payload['filename']
+    } for hit in search_result]
 
-optimized_code = """
-points = [
-    PointStruct(
-        id=i + j,
-        vector=vector,
-        payload={
-            "filepath": filepath,
-            "filename": os.path.basename(filepath)
-        }
-    )
-    for j, (vector, filepath) in enumerate(zip(vectors, valid_paths))
-]
-"""
+loop_time = timeit.timeit(using_loop, number=100000)
+list_comp_time = timeit.timeit(using_list_comp, number=100000)
 
-# Run benchmarks
-n_iters = 10000
-
-baseline_time = timeit.timeit(stmt=baseline_code, setup=setup_code, number=n_iters)
-print(f"Baseline (append): {baseline_time:.4f} seconds for {n_iters} iterations")
-
-optimized_time = timeit.timeit(stmt=optimized_code, setup=setup_code, number=n_iters)
-print(f"Optimized (list comprehension): {optimized_time:.4f} seconds for {n_iters} iterations")
-
-improvement = (baseline_time - optimized_time) / baseline_time * 100
-print(f"Improvement: {improvement:.2f}%")
+print(f"Loop time: {loop_time:.6f} seconds")
+print(f"List comp time: {list_comp_time:.6f} seconds")
+print(f"Improvement: {(loop_time - list_comp_time) / loop_time * 100:.2f}%")
