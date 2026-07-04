@@ -5,6 +5,7 @@ from PIL import Image
 import torch
 from transformers import CLIPProcessor, CLIPModel
 from qdrant_client import QdrantClient
+from utils import extract_features
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max
@@ -52,17 +53,7 @@ def get_image_vector_from_bytes(image_bytes):
     except Exception as e:
         raise ValueError(f"Invalid image: {e}")
 
-    inputs = processor(images=[img], return_tensors="pt").to(device)
-    with torch.no_grad():
-        features = model.get_image_features(**inputs)
-
-    if hasattr(features, 'pooler_output'):
-        features = features.pooler_output
-    elif isinstance(features, tuple):
-        features = features[0]
-
-    features = features / features.norm(dim=-1, keepdim=True)
-    vectors = features.cpu().numpy().tolist()
+    vectors = extract_features([img], model, processor, device)
 
     return vectors[0]
 

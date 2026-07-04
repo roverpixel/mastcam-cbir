@@ -4,6 +4,7 @@ from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 import os
 from qdrant_client import QdrantClient
+from utils import extract_features
 
 # --- CONFIGURATION ---
 DB_PATH = os.environ.get("DB_PATH", "./mars_qdrant_db")
@@ -31,12 +32,7 @@ def get_image_vector(image_path):
         print(f"Error opening image {image_path}: {e}")
         sys.exit(1)
 
-    inputs = processor(images=[img], return_tensors="pt").to(device)
-    with torch.no_grad():
-        features = model.get_image_features(**inputs)
-
-    features = features / features.norm(dim=-1, keepdim=True)
-    vectors = features.cpu().numpy().tolist()
+    vectors = extract_features([img], model, processor, device)
 
     return vectors[0]
 
