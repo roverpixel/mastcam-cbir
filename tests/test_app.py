@@ -50,6 +50,9 @@ def test_search_no_file(client):
     assert response.status_code == 400
     assert b'No file uploaded' in response.data
 
+def test_get_image_vector_from_bytes_invalid_image():
+    with pytest.raises(ValueError, match="Invalid image:"):
+        get_image_vector_from_bytes(b"not an image")
 def test_search_empty_filename(client):
     # Create dummy image file
     img = Image.new('RGB', (10, 10), color='red')
