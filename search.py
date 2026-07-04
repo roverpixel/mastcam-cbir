@@ -9,11 +9,21 @@ from qdrant_client import QdrantClient
 DB_PATH = os.environ.get("DB_PATH", "./mars_qdrant_db")
 COLLECTION_NAME = os.environ.get("COLLECTION_NAME", "mars_mastcam")
 
+_model = None
+_processor = None
+_device = "cuda" if torch.cuda.is_available() else "cpu"
+
+def get_model():
+    global _model, _processor
+    if _model is None:
+        model_id = "openai/clip-vit-base-patch32"
+        _model = CLIPModel.from_pretrained(model_id).to(_device)
+        _processor = CLIPProcessor.from_pretrained(model_id)
+    return _model, _processor
+
 def get_image_vector(image_path):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model_id = "openai/clip-vit-base-patch32"
-    model = CLIPModel.from_pretrained(model_id).to(device)
-    processor = CLIPProcessor.from_pretrained(model_id)
+    model, processor = get_model()
+    device = _device
 
     try:
         img = Image.open(image_path).convert("RGB")
