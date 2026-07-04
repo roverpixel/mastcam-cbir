@@ -49,3 +49,17 @@ def test_search_no_file(client):
     response = client.post('/search')
     assert response.status_code == 400
     assert b'No file uploaded' in response.data
+
+def test_search_empty_filename(client):
+    # Create dummy image file
+    img = Image.new('RGB', (10, 10), color='red')
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format='JPEG')
+    img_byte_arr.seek(0)
+
+    response = client.post('/search', data={
+        'file': (img_byte_arr, '')
+    })
+
+    assert response.status_code == 400
+    assert b'No selected file' in response.data
