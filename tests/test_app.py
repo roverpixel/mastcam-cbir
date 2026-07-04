@@ -49,3 +49,17 @@ def test_search_no_file(client):
     response = client.post('/search')
     assert response.status_code == 400
     assert b'No file uploaded' in response.data
+
+@patch('app.Image.open')
+@patch('app.get_model')
+def test_decompression_bomb_prevention(mock_get_model, mock_image_open):
+    # Mock get_model so we don't load CLIP
+    mock_get_model.return_value = (MagicMock(), MagicMock())
+
+    # Simulate a decompression bomb error
+    mock_image_open.side_effect = Image.DecompressionBombError("Image size exceeds limit")
+
+    with pytest.raises(ValueError) as excinfo:
+        get_image_vector_from_bytes(b"dummy image data")
+
+    assert "Invalid image: Image size exceeds limit" in str(excinfo.value)

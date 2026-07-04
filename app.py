@@ -47,6 +47,8 @@ def get_qdrant():
 def get_image_vector_from_bytes(image_bytes):
     model, processor = get_model()
     try:
+        # Prevent Decompression Bomb attacks
+        Image.MAX_IMAGE_PIXELS = 89478485 # Safe limit (89 MP)
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     except Exception as e:
         raise ValueError(f"Invalid image: {e}")
