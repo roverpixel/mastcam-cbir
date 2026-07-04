@@ -25,6 +25,7 @@ model_id = "openai/clip-vit-base-patch32"
 # Global variables for lazy loading
 _model = None
 _processor = None
+_qdrant_client = None
 
 def get_model():
     global _model, _processor
