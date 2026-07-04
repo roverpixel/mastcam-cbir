@@ -1,11 +1,11 @@
 import os
 import io
 from flask import Flask, request, jsonify, render_template, send_from_directory
-from werkzeug.utils import secure_filename
 from PIL import Image
 import torch
 from transformers import CLIPProcessor, CLIPModel
 from qdrant_client import QdrantClient
+from utils import extract_features
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max
@@ -47,21 +47,13 @@ def get_qdrant():
 def get_image_vector_from_bytes(image_bytes):
     model, processor = get_model()
     try:
+        # Prevent Decompression Bomb attacks
+        Image.MAX_IMAGE_PIXELS = 89478485 # Safe limit (89 MP)
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     except Exception as e:
         raise ValueError(f"Invalid image: {e}")
 
-    inputs = processor(images=[img], return_tensors="pt").to(device)
-    with torch.no_grad():
-        features = model.get_image_features(**inputs)
-
-    if hasattr(features, 'pooler_output'):
-        features = features.pooler_output
-    elif isinstance(features, tuple):
-        features = features[0]
-
-    features = features / features.norm(dim=-1, keepdim=True)
-    vectors = features.cpu().numpy().tolist()
+    vectors = extract_features([img], model, processor, device)
 
     return vectors[0]
 
@@ -104,12 +96,13 @@ def search():
                 limit=10
             ).points
 
-        results = []
-        for hit in search_result:
-            results.append({
+        results = [
+            {
                 'score': round(hit.score, 4),
                 'filename': hit.payload['filename']
-            })
+            }
+            for hit in search_result
+        ]
 
         return jsonify({'matches': results})
 
