@@ -4,6 +4,7 @@ import torch
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 from qdrant_client import QdrantClient
+from utils import extract_features
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from tqdm import tqdm
 
@@ -89,18 +90,7 @@ def main():
 
         # Process batch through CLIP
         try:
-            inputs = processor(images=valid_images, return_tensors="pt").to(device)
-            with torch.no_grad():
-                features = model.get_image_features(**inputs)
-
-            if hasattr(features, 'pooler_output'):
-                features = features.pooler_output
-            elif isinstance(features, tuple):
-                features = features[0]
-
-            # Normalize vectors (best practice for Cosine similarity)
-            features = features / features.norm(dim=-1, keepdim=True)
-            vectors = features.cpu().numpy().tolist()
+            vectors = extract_features(valid_images, model, processor, device)
 
             # 5. Prepare Qdrant Points
             points = []
