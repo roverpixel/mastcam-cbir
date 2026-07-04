@@ -103,20 +103,17 @@ def main():
             vectors = features.cpu().numpy().tolist()
 
             # 5. Prepare Qdrant Points
-            points = []
-            for j, (vector, filepath) in enumerate(zip(vectors, valid_paths)):
-                # Use a unique integer ID based on the global index
-                point_id = i + j
-                points.append(
-                    PointStruct(
-                        id=point_id,
-                        vector=vector,
-                        payload={
-                            "filepath": filepath,
-                            "filename": os.path.basename(filepath)
-                        }
-                    )
+            points = [
+                PointStruct(
+                    id=i + j,
+                    vector=vector,
+                    payload={
+                        "filepath": filepath,
+                        "filename": os.path.basename(filepath)
+                    }
                 )
+                for j, (vector, filepath) in enumerate(zip(vectors, valid_paths))
+            ]
 
             # 6. Upload to Vector Database
             qdrant.upsert(
