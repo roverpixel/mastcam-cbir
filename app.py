@@ -16,11 +16,9 @@ class ProxyPrefixFix:
         self.app = app
 
     def __call__(self, environ, start_response):
-        # Fallback to os.environ if not in WSGI environ
-        prefix = environ.get('HTTP_X_FORWARDED_PREFIX', os.environ.get('HTTP_X_FORWARDED_PREFIX', ''))
+        prefix = environ.get('SCRIPT_NAME', '') or os.environ.get('HTTP_X_FORWARDED_PREFIX', '')
 
         if prefix:
-            environ['HTTP_X_FORWARDED_PREFIX'] = prefix
             environ['SCRIPT_NAME'] = prefix
 
         if prefix and environ.get('PATH_INFO', '').startswith(prefix):
