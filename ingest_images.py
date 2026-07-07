@@ -1,6 +1,7 @@
 import os
 import glob
 import torch
+import concurrent.futures
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 from qdrant_client import QdrantClient
@@ -34,6 +35,14 @@ def setup_database():
 
     return client
 
+def save_thumbnail(img_copy, path):
+    try:
+        img_copy.thumbnail((256, 256))
+        thumb_path = os.path.join(THUMBNAIL_DIRECTORY, os.path.basename(path))
+        img_copy.save(thumb_path)
+    except Exception as e:
+        print(f"\nError saving thumbnail for {path}: {e}")
+
 def main():
     # 1. Setup Device & Model
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -65,67 +74,66 @@ def main():
 
     # 4. Batch Processing Loop
     # We process in batches to maximize GPU/CPU efficiency and prevent memory crashes
-    for i in tqdm(range(0, total_images, BATCH_SIZE), desc="Ingesting Images"):
-        batch_paths = image_paths[i : i + BATCH_SIZE]
-        valid_images = []
-        valid_paths = []
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        for i in tqdm(range(0, total_images, BATCH_SIZE), desc="Ingesting Images"):
+            batch_paths = image_paths[i : i + BATCH_SIZE]
+            valid_images = []
+            valid_paths = []
 
-        # Open images and filter out corrupted files
-        for path in batch_paths:
+            # Open images and filter out corrupted files
+            for path in batch_paths:
+                try:
+                    img = Image.open(path).convert("RGB")
+                    valid_images.append(img)
+                    valid_paths.append(path)
+
+                    # Offload thumbnail saving to background thread
+                    executor.submit(save_thumbnail, img.copy(), path)
+                except Exception as e:
+                    print(f"\nSkipping corrupted image {path}: {e}")
+
+            if not valid_images:
+                continue
+
+            # Process batch through CLIP
             try:
-                img = Image.open(path).convert("RGB")
-                valid_images.append(img)
-                valid_paths.append(path)
+                inputs = processor(images=valid_images, return_tensors="pt").to(device)
+                with torch.no_grad():
+                    features = model.get_image_features(**inputs)
 
-                # Save thumbnail
-                img.thumbnail((256, 256))
-                thumb_path = os.path.join(THUMBNAIL_DIRECTORY, os.path.basename(path))
-                img.save(thumb_path)
-            except Exception as e:
-                print(f"\nSkipping corrupted image {path}: {e}")
+                if hasattr(features, 'pooler_output'):
+                    features = features.pooler_output
+                elif isinstance(features, tuple):
+                    features = features[0]
 
-        if not valid_images:
-            continue
+                # Normalize vectors (best practice for Cosine similarity)
+                features = features / features.norm(dim=-1, keepdim=True)
+                vectors = features.cpu().numpy().tolist()
 
-        # Process batch through CLIP
-        try:
-            inputs = processor(images=valid_images, return_tensors="pt").to(device)
-            with torch.no_grad():
-                features = model.get_image_features(**inputs)
-
-            if hasattr(features, 'pooler_output'):
-                features = features.pooler_output
-            elif isinstance(features, tuple):
-                features = features[0]
-
-            # Normalize vectors (best practice for Cosine similarity)
-            features = features / features.norm(dim=-1, keepdim=True)
-            vectors = features.cpu().numpy().tolist()
-
-            # 5. Prepare Qdrant Points
-            points = []
-            for j, (vector, filepath) in enumerate(zip(vectors, valid_paths)):
-                # Use a unique integer ID based on the global index
-                point_id = i + j
-                points.append(
-                    PointStruct(
-                        id=point_id,
-                        vector=vector,
-                        payload={
-                            "filepath": filepath,
-                            "filename": os.path.basename(filepath)
-                        }
+                # 5. Prepare Qdrant Points
+                points = []
+                for j, (vector, filepath) in enumerate(zip(vectors, valid_paths)):
+                    # Use a unique integer ID based on the global index
+                    point_id = i + j
+                    points.append(
+                        PointStruct(
+                            id=point_id,
+                            vector=vector,
+                            payload={
+                                "filepath": filepath,
+                                "filename": os.path.basename(filepath)
+                            }
+                        )
                     )
+
+                # 6. Upload to Vector Database
+                qdrant.upsert(
+                    collection_name=COLLECTION_NAME,
+                    points=points
                 )
 
-            # 6. Upload to Vector Database
-            qdrant.upsert(
-                collection_name=COLLECTION_NAME,
-                points=points
-            )
-
-        except Exception as e:
-            print(f"\nError processing batch starting at index {i}: {e}")
+            except Exception as e:
+                print(f"\nError processing batch starting at index {i}: {e}")
 
     print("\n✅ Ingestion Complete!")
     print(f"Vectors are stored safely in: {os.path.abspath(DB_PATH)}")
