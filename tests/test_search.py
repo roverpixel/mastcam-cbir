@@ -82,3 +82,30 @@ def test_main_no_args(capsys):
 
     captured = capsys.readouterr()
     assert "Usage: python search.py <image_path>" in captured.out
+
+@patch('search.QdrantClient')
+@patch('search.get_image_vector')
+@patch('sys.argv', ['search.py', 'dummy_image.jpg'])
+def test_main_search_error(mock_get_image_vector, mock_qdrant_client, capsys):
+    mock_get_image_vector.return_value = [0.1, 0.2]
+    mock_client_instance = mock_qdrant_client.return_value
+
+    mock_client_instance.search.side_effect = Exception("Simulated Qdrant search error")
+
+    search.main()
+
+    captured = capsys.readouterr()
+    assert "Error during search: Simulated Qdrant search error" in captured.out
+@patch('search.QdrantClient')
+@patch('sys.argv', ['search.py', 'dummy_image.jpg'])
+def test_main_qdrant_connection_error(mock_qdrant_client, capsys):
+    mock_qdrant_client.side_effect = Exception("Connection Refused")
+
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        search.main()
+
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "Error connecting to Qdrant local database: Connection Refused" in captured.out

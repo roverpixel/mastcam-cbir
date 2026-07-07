@@ -11,6 +11,7 @@ services:
       - IMAGE_DIRECTORY=/images
       - DB_PATH=/db
       - THUMBNAIL_DIRECTORY=/thumbnails
+      - PORT=5000
     command: python ingest_images.py
 
   web:
@@ -21,6 +22,7 @@ services:
     environment:
       - DB_PATH=/db
       - THUMBNAIL_DIRECTORY=/thumbnails
+      - PORT=5000
     ports:
-      - "5000:5000"
+      - "7008:5000"
     command: python app.py

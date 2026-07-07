@@ -1,14 +1,38 @@
 import os
 import io
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, request, jsonify, render_template, send_from_directory
-from werkzeug.utils import secure_filename
 from PIL import Image
 import torch
 from transformers import CLIPProcessor, CLIPModel
 from qdrant_client import QdrantClient
+from utils import extract_features
+
+class ProxyPrefixFix:
+    """
+    Middleware to strip the X-Forwarded-Prefix from the path if the proxy didn't do it.
+    """
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+        prefix = environ.get('SCRIPT_NAME', '') or os.environ.get('HTTP_X_FORWARDED_PREFIX', '')
+
+        if prefix:
+            environ['SCRIPT_NAME'] = prefix
+
+        if prefix and environ.get('PATH_INFO', '').startswith(prefix):
+            environ['PATH_INFO'] = environ['PATH_INFO'][len(prefix):]
+            if not environ['PATH_INFO']:
+                environ['PATH_INFO'] = '/'
+
+        return self.app(environ, start_response)
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max
+# Apply ProxyFix and ProxyPrefixFix to support subpaths and reverse proxies
+app.wsgi_app = ProxyPrefixFix(app.wsgi_app)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # Configuration
 DB_PATH = os.environ.get("DB_PATH", "./mars_qdrant_db")
@@ -25,6 +49,7 @@ model_id = "openai/clip-vit-base-patch32"
 # Global variables for lazy loading
 _model = None
 _processor = None
+_qdrant_client = None
 
 def get_model():
     global _model, _processor
@@ -47,21 +72,13 @@ def get_qdrant():
 def get_image_vector_from_bytes(image_bytes):
     model, processor = get_model()
     try:
+        # Prevent Decompression Bomb attacks
+        Image.MAX_IMAGE_PIXELS = 89478485 # Safe limit (89 MP)
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     except Exception as e:
         raise ValueError(f"Invalid image: {e}")
 
-    inputs = processor(images=[img], return_tensors="pt").to(device)
-    with torch.no_grad():
-        features = model.get_image_features(**inputs)
-
-    if hasattr(features, 'pooler_output'):
-        features = features.pooler_output
-    elif isinstance(features, tuple):
-        features = features[0]
-
-    features = features / features.norm(dim=-1, keepdim=True)
-    vectors = features.cpu().numpy().tolist()
+    vectors = extract_features([img], model, processor, device)
 
     return vectors[0]
 
@@ -104,12 +121,13 @@ def search():
                 limit=10
             ).points
 
-        results = []
-        for hit in search_result:
-            results.append({
+        results = [
+            {
                 'score': round(hit.score, 4),
                 'filename': hit.payload['filename']
-            })
+            }
+            for hit in search_result
+        ]
 
         return jsonify({'matches': results})
 
@@ -117,4 +135,4 @@ def search():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=True)

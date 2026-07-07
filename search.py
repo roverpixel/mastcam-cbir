@@ -4,16 +4,27 @@ from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 import os
 from qdrant_client import QdrantClient
+from utils import extract_features
 
 # --- CONFIGURATION ---
 DB_PATH = os.environ.get("DB_PATH", "./mars_qdrant_db")
 COLLECTION_NAME = os.environ.get("COLLECTION_NAME", "mars_mastcam")
 
+_model = None
+_processor = None
+_device = "cuda" if torch.cuda.is_available() else "cpu"
+
+def get_model():
+    global _model, _processor
+    if _model is None:
+        model_id = "openai/clip-vit-base-patch32"
+        _model = CLIPModel.from_pretrained(model_id).to(_device)
+        _processor = CLIPProcessor.from_pretrained(model_id)
+    return _model, _processor
+
 def get_image_vector(image_path):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model_id = "openai/clip-vit-base-patch32"
-    model = CLIPModel.from_pretrained(model_id).to(device)
-    processor = CLIPProcessor.from_pretrained(model_id)
+    model, processor = get_model()
+    device = _device
 
     try:
         img = Image.open(image_path).convert("RGB")
@@ -21,12 +32,7 @@ def get_image_vector(image_path):
         print(f"Error opening image {image_path}: {e}")
         sys.exit(1)
 
-    inputs = processor(images=[img], return_tensors="pt").to(device)
-    with torch.no_grad():
-        features = model.get_image_features(**inputs)
-
-    features = features / features.norm(dim=-1, keepdim=True)
-    vectors = features.cpu().numpy().tolist()
+    vectors = extract_features([img], model, processor, device)
 
     return vectors[0]
 
